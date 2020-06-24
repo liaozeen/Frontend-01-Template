@@ -1,0 +1,184 @@
+<style>
+    .cell {
+        display:inline-block;
+        width:6px;
+        height:6px;
+        background-color: gray;
+        border-bottom:solid 1px white;
+        border-right:solid 1px white;
+        vertical-align: middle;
+    }
+    #container{
+        width:701px;
+    }
+
+    .done{
+        background-color: blue;
+    }
+</style>
+<div id="container"></div>
+<button onclick="localStorage.map = JSON.stringify(map)">save</button>
+<button onclick="clearStorage()">clear</button>
+
+<script>
+    class Sorted{
+        constructor(data, compare){
+            this.data = data.slice()
+            this.compare = compare || ((a,b) => a -b)
+        }
+        take(){
+            if(!this.data.length) return
+
+            let min = this.data[0]
+            let minIndex = 0
+
+            for(let i =1; i < this.data.length;i++){
+                if(this.compare(this.data[i],min) < 0){
+                    min = this.data[i]
+                    minIndex = i
+                }
+            }
+
+            this.data[minIndex] = this.data[this.data.length -1] //为什么把后面的补上
+            this.data.pop()
+            return min
+        }
+        give(v){
+            this.data.push(v)
+        }
+        get length(){
+            return this.data.length
+        }
+    }
+
+    var map = localStorage.map ? JSON.parse(localStorage.map) : new Array(10000).fill(0);
+
+    function drawMap(map){
+        let container = document.getElementById("container");
+        container.innerHTML = ''
+        for(let y = 0; y < 100; y++) {
+            for(let x = 0; x < 100; x++) {
+                let cell = document.createElement("div");
+                cell.classList.add("cell");
+
+                if(map[y * 100 + x] === 1)
+                    cell.style.backgroundColor = 'black';
+
+                cell.addEventListener("mouseover", () => {
+                    if(mouse) {
+                        if(clear) {
+                            cell.style.backgroundColor = '';
+                            setMap([x,y],0)
+                        } else {
+                            cell.style.backgroundColor = 'black';
+                            setMap([x,y],1)
+                        }
+                    }
+                        
+                })
+
+                container.appendChild(cell);
+            }
+        }
+    }
+
+    drawMap(map)
+    let mouse = false;
+    let clear = false;
+
+    document.addEventListener('mousedown', e => {
+        mouse = true
+        clear = (e.which === 3);
+    })
+    document.addEventListener('mouseup', ()=> mouse = false)
+
+    document.addEventListener('contextmenu', e => e.preventDefault())
+
+    function setMap(point,value){
+        map[getMapIndex(point)] = value
+    }
+
+    function getMap(point){
+        return map[getMapIndex(point)]
+    }
+
+    function getMapIndex(point){
+        return point[1] * 100 + point[0]
+    }
+
+    function setCellBgcolor(point,color = 'black'){
+        let cell = container.childNodes[getMapIndex(point)]
+        cell.style.backgroundColor = color
+    }
+
+    function sleep(t){
+        return new Promise( resolve => {
+            setTimeout(resolve,t)
+        })
+    }
+
+    function hManhattan(p1,p2){
+        return Math.abs(p1[0] - p2[0]) + Math.abs(p1[1] - p2[1])
+    }
+
+    function clearStorage(){
+        localStorage.map =  ''
+        map = new Array(10000).fill(0)
+        drawMap(map)
+    }
+
+    // 寻路算法
+    async function findPath(map,start, end) {
+        let table = Object.create(map) // 拷贝一份
+        let queue = new Sorted([start], (a,b) => hManhattan(a,end) - hManhattan(b,end))
+        setCellBgcolor(start,'red')
+        async function insert(x, y,pre){
+            // 边界判断
+            if(x < 0 || y < 0 || x >= 100 || y >=100){
+                return
+            }
+            if(table[y*100 + x]){
+                return
+            }
+
+            await sleep(1)
+      
+            setCellBgcolor([x,y],'green')
+            table[y*100 + x] = pre
+            queue.give([x,y])
+        }
+
+        while(queue.length){
+            let [x,y] = queue.take()
+
+            if(x === end[0] && y === end[1]){
+                let path = []
+              
+                while(x !== start[0] || y !== start[1]){
+                    let p =  table[y*100 + x]
+                    x = p[0]
+                    y = p[1]
+                    path.push(p)
+                    setCellBgcolor([x,y],'red')
+                }
+
+                setCellBgcolor(start,'red')
+                return path
+            }
+
+            // 上下左右
+            await insert(x,y-1,[x,y])
+            await insert(x,y+1,[x,y])
+            await insert(x -1 ,y,[x,y])
+            await insert(x + 1,y,[x,y])
+
+            // 斜角
+            await insert(x -1,y-1,[x,y])
+            await insert(x -1,y+1,[x,y])
+            await insert(x +1 ,y -1,[x,y])
+            await insert(x + 1,y+1,[x,y])
+        }
+
+        return false
+    }
+</script>
